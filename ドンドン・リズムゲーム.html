@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ドンドン・リズムゲーム</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'M PLUS Rounded 1c', sans-serif;
+            background-color: #fef08a; /* yellow-200 */
+            background-image: radial-gradient(#fde047 2px, transparent 2px); /* yellow-300 */
+            background-size: 30px 30px;
+            overscroll-behavior-y: none;
+            touch-action: manipulation;
+        }
+        
+        .game-canvas-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            border-radius: 1rem;
+            overflow: hidden;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+            background-color: #1f2937; /* gray-800 */
+            border: 4px solid #374151; /* gray-700 */
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+            touch-action: none;
+        }
+
+        /* 判定テキストのアニメーション */
+        @keyframes popup {
+            0% { transform: scale(0.5) translateY(0); opacity: 1; }
+            50% { transform: scale(1.2) translateY(-20px); opacity: 1; }
+            100% { transform: scale(1) translateY(-30px); opacity: 0; }
+        }
+
+        .popup-text {
+            position: absolute;
+            font-weight: 900;
+            font-size: 2rem;
+            text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;
+            pointer-events: none;
+            animation: popup 0.6s ease-out forwards;
+            z-index: 10;
+        }
+
+        .perfect { color: #facc15; } /* yellow-400 */
+        .good { color: #4ade80; } /* green-400 */
+        .miss { color: #94a3b8; } /* slate-400 */
+
+        /* スマホ用ボタンのスタイル */
+        .control-btn {
+            transition: transform 0.1s, filter 0.1s;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .control-btn:active {
+            transform: scale(0.95);
+            filter: brightness(0.8);
+        }
+
+        /* タイトルアニメーション */
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .title-bounce {
+            animation: bounce 2s infinite;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div id="app" class="w-full max-w-4xl bg-white rounded-3xl shadow-2xl p-6 sm:p-8 relative overflow-hidden border-8 border-orange-400">
+        
+        <!-- メニュー画面 -->
+        <div id="menu-screen" class="flex flex-col items-center justify-center space-y-8 py-8">
+            <h1 class="text-4xl sm:text-6xl font-black text-orange-600 drop-shadow-md title-bounce text-center leading-tight">
+                ドンドン・<br class="sm:hidden">リズムゲーム
+            </h1>
+            
+            <div class="bg-orange-50 p-6 rounded-2xl border-4 border-orange-200 w-full max-w-md text-center">
+                <h2 class="text-xl font-bold mb-4 text-gray-700">🎵 BGMを選ぶ (任意)</h2>
+                <input type="file" id="bgm-input" accept="audio/*" class="block w-full text-sm text-gray-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-full file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-orange-100 file:text-orange-700
+                    hover:file:bg-orange-200
+                    cursor-pointer
+                "/>
+                <p class="text-sm text-gray-500 mt-2" id="bgm-status">選択しない場合は無音(約30秒)になります。</p>
+            </div>
+
+            <div class="w-full max-w-md">
+                <h2 class="text-2xl font-bold mb-4 text-center text-gray-700">難易度をえらぶ</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <button class="level-btn bg-green-400 hover:bg-green-500 text-white font-bold py-4 px-6 rounded-xl shadow-lg border-b-4 border-green-600 text-2xl transform transition hover:-translate-y-1" data-level="easy">
+                        かんたん
+                    </button>
+                    <button class="level-btn bg-blue-400 hover:bg-blue-500 text-white font-bold py-4 px-6 rounded-xl shadow-lg border-b-4 border-blue-600 text-2xl transform transition hover:-translate-y-1" data-level="normal">
+                        ふつう
+                    </button>
+                    <button class="level-btn bg-red-500 hover:bg-red-600 text-white font-bold py-4 px-6 rounded-xl shadow-lg border-b-4 border-red-700 text-2xl transform transition hover:-translate-y-1" data-level="hard">
+                        むずかしい
+                    </button>
+                    <button class="level-btn bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg border-b-4 border-purple-800 text-2xl transform transition hover:-translate-y-1" data-level="oni">
+                        鬼
+                    </button>
+                </div>
+            </div>
+            
+            <div class="text-left bg-gray-100 p-4 rounded-xl text-sm text-gray-600 w-full max-w-md">
+                <p class="font-bold mb-1">【あそびかた】</p>
+                <p>🔴 ドン(赤): 🐷 左半分タップ or [F] [J]キー</p>
+                <p>🔵 カッ(青): 🐸 右半分タップ or [D] [K]キー</p>
+                <p>⚠️ 点線(お邪魔): 👻 叩かないでやり過ごす！</p>
+            </div>
+        </div>
+
+        <!-- ゲーム画面 -->
+        <div id="game-screen" class="hidden flex flex-col w-full h-full relative">
+            
+            <!-- スコア・UI ヘッダー -->
+            <div class="flex justify-between items-center mb-2 bg-gray-100 p-3 rounded-xl shadow-inner border-2 border-gray-200">
+                <div class="flex flex-col">
+                    <span class="text-sm font-bold text-gray-500">SCORE</span>
+                    <span id="ui-score" class="text-2xl font-black text-gray-800 leading-none">0</span>
+                </div>
+                
+                <!-- 達成率ゲージ -->
+                <div class="flex-1 mx-4 flex flex-col justify-center">
+                    <div class="flex justify-between text-xs font-bold text-gray-500 mb-1">
+                        <span>達成率</span>
+                        <span id="ui-percent-text">0.0%</span>
+                    </div>
+                    <div class="w-full bg-gray-300 h-4 rounded-full overflow-hidden shadow-inner">
+                        <div id="ui-gauge" class="bg-gradient-to-r from-yellow-300 via-orange-400 to-red-500 h-full w-0 transition-all duration-200 ease-out"></div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col items-end">
+                    <span class="text-sm font-bold text-gray-500">COMBO</span>
+                    <span id="ui-combo" class="text-2xl font-black text-red-500 leading-none">0</span>
+                </div>
+            </div>
+
+            <!-- Canvas コンテナ -->
+            <div class="game-canvas-container relative" id="canvas-container">
+                <canvas id="gameCanvas" width="800" height="240"></canvas>
+                <!-- カウントダウンやメッセージ用オーバーレイ -->
+                <div id="game-overlay" class="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                    <span id="overlay-text" class="text-6xl font-black text-white drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] opacity-0 transition-opacity duration-200"></span>
+                </div>
+            </div>
+
+            <!-- コントロールボタン (スマホ・タブレット用) -->
+            <div class="mt-4 grid grid-cols-4 gap-2">
+                <button id="btn-ka-l" class="control-btn bg-blue-500 rounded-xl h-20 sm:h-24 shadow-[0_6px_0_#1e3a8a] border-2 border-blue-300 flex items-center justify-center text-white font-bold text-xl sm:text-2xl">
+                    カッ (D)
+                </button>
+                <button id="btn-don-l" class="control-btn bg-rose-500 rounded-xl h-20 sm:h-24 shadow-[0_6px_0_#9f1239] border-2 border-rose-300 flex items-center justify-center text-white font-bold text-xl sm:text-2xl">
+                    ドン (F)
+                </button>
+                <button id="btn-don-r" class="control-btn bg-rose-500 rounded-xl h-20 sm:h-24 shadow-[0_6px_0_#9f1239] border-2 border-rose-300 flex items-center justify-center text-white font-bold text-xl sm:text-2xl">
+                    ドン (J)
+                </button>
+                <button id="btn-ka-r" class="control-btn bg-blue-500 rounded-xl h-20 sm:h-24 shadow-[0_6px_0_#1e3a8a] border-2 border-blue-300 flex items-center justify-center text-white font-bold text-xl sm:text-2xl">
+                    カッ (K)
+                </button>
+            </div>
+            
+            <button id="btn-quit" class="mt-4 text-gray-500 underline text-sm text-center w-full">ゲームをやめる</button>
+        </div>
+
+        <!-- リザルト画面 -->
+        <div id="result-screen" class="hidden flex flex-col items-center justify-center space-y-6 py-8">
+            <h2 class="text-4xl font-black text-orange-600 mb-2">結果発表</h2>
+            
+            <div class="bg-gray-100 p-6 rounded-2xl w-full max-w-sm shadow-inner border-2 border-gray-200">
+                <div class="text-center mb-4">
+                    <div class="text-sm font-bold text-gray-500">最終達成率</div>
+                    <div id="res-percent" class="text-5xl font-black text-gray-800">0%</div>
+                </div>
+                
+                <div class="space-y-2 border-t-2 border-dashed border-gray-300 pt-4">
+                    <div class="flex justify-between items-center text-lg">
+                        <span class="font-bold text-yellow-500">良 (Perfect)</span>
+                        <span id="res-perfect" class="font-black">0</span>
+                    </div>
+                    <div class="flex justify-between items-center text-lg">
+                        <span class="font-bold text-green-500">可 (Good)</span>
+                        <span id="res-good" class="font-black">0</span>
+                    </div>
+                    <div class="flex justify-between items-center text-lg">
+                        <span class="font-bold text-slate-500">不可 (Miss)</span>
+                        <span id="res-miss" class="font-black">0</span>
+                    </div>
+                    <div class="flex justify-between items-center text-lg pt-2 border-t border-gray-200 mt-2">
+                        <span class="font-bold text-red-500">最大コンボ</span>
+                        <span id="res-max-combo" class="font-black">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="res-rank" class="text-6xl font-black text-orange-500 drop-shadow-lg title-bounce">
+                S ランク!!
+            </div>
+
+            <button id="btn-back-title" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 px-10 rounded-full shadow-lg border-b-4 border-orange-700 text-xl mt-4 transition transform hover:scale-105">
+                タイトルに戻る
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- 変数定義 ---
+        const screens = {
+            menu: document.getElementById('menu-screen'),
+            game: document.getElementById('game-screen'),
+            result: document.getElementById('result-screen')
+        };
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const canvasContainer = document.getElementById('canvas-container');
+
+        // UI要素
+        const uiScore = document.getElementById('ui-score');
+        const uiCombo = document.getElementById('ui-combo');
+        const uiGauge = document.getElementById('ui-gauge');
+        const uiPercentText = document.getElementById('ui-percent-text');
+        const overlayText = document.getElementById('overlay-text');
+
+        // BGM関連
+        let bgmAudio = new Audio();
+        let hasBGM = false;
+        let bgmDuration = 30; // デフォルト30秒
+        const bgmInput = document.getElementById('bgm-input');
+        const bgmStatus = document.getElementById('bgm-status');
+
+        // AudioContext for SFX
+        let audioCtx;
+        
+        // ゲーム状態
+        let gameState = 'menu'; // menu, playing, result
+        let currentLevel = 'easy';
+        let notes = [];
+        let noteSpeed = 400; // px/sec
+        
+        // 判定関連
+        const TARGET_X = 150; // 判定ラインのX座標
+        const THRESHOLD_PERFECT = 0.08;
+        const THRESHOLD_GOOD = 0.15;
+        const THRESHOLD_MISS = 0.25;
+
+        // スコア・統計
+        let score = 0;
+        let combo = 0;
+        let maxCombo = 0;
+        let counts = { perfect: 0, good: 0, miss: 0 };
+        let totalValuableNotes = 0;
+
+        // タイマー管理
+        let gameStartTime = 0;
+        let animationFrameId = null;
+
+        // Emoji設定
+        const EMOJI_DON = '🐷';
+        const EMOJI_KA = '🐸';
+        const EMOJI_AVOID = '👻';
+
+        // --- BGM読み込み処理 ---
+        bgmInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                bgmAudio.src = url;
+                bgmAudio.onloadedmetadata = () => {
+                    hasBGM = true;
+                    bgmDuration = bgmAudio.duration;
+                    bgmStatus.textContent = `BGMをセットしました！ (約${Math.floor(bgmDuration)}秒)`;
+                    bgmStatus.classList.replace('text-gray-500', 'text-green-600');
+                    bgmStatus.classList.add('font-bold');
+                };
+            } else {
+                hasBGM = false;
+                bgmDuration = 30;
+                bgmStatus.textContent = '選択しない場合は無音(約30秒)になります。';
+                bgmStatus.classList.replace('text-green-600', 'text-gray-500');
+                bgmStatus.classList.remove('font-bold');
+            }
+        });
+
+        // --- STREAMING_CHUNK:Setting up AudioContext for Sound Effects... ---
+        function initAudioContext() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // 打撃音のシンセサイズ生成
+        function playDrumSound(type) {
+            if (!audioCtx) return;
+            const t = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'don') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(180, t);
+                osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.2);
+                gain.gain.setValueAtTime(1, t);
+                gain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+                osc.start(t);
+                osc.stop(t + 0.2);
+            } else if (type === 'ka') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(600, t);
+                osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.1);
+                gain.gain.setValueAtTime(0.4, t);
+                gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+                
+                // 少しノイズっぽさを足すためにハイパスフィルタ的な効果を擬似的に
+                const osc2 = audioCtx.createOscillator();
+                osc2.type = 'sawtooth';
+                osc2.frequency.setValueAtTime(1200, t);
+                osc2.connect(gain);
+                osc2.start(t);
+                osc2.stop(t + 0.1);
+                
+                osc.start(t);
+                osc.stop(t + 0.1);
+            }
+        }
+
+        // --- STREAMING_CHUNK:Implementing beatmap generation logic... ---
+        // 譜面（ノーツ）の自動生成
+        function generateBeatmap(level, duration) {
+            const newNotes = [];
+            let interval; // ノーツを置く基準間隔(秒)
+            let speed;
+            
+            // 難易度設定
+            if (level === 'easy') {
+                interval = 0.5; // BPM 120の4分音符相当
+                speed = 350;
+            } else if (level === 'normal') {
+                interval = 0.4; // BPM 150
+                speed = 450;
+            } else if (level === 'hard') {
+                interval = 0.25; // BPM 120の8分音符相当
+                speed = 600;
+            } else if (level === 'oni') {
+                interval = 0.15; // 高速・高密度
+                speed = 850;
+            }
+
+            // 曲の最初2秒、最後2秒はノーツを置かない
+            for (let t = 2; t < duration - 2; t += interval) {
+                const r = Math.random();
+                let type = null;
+
+                if (level === 'easy') {
+                    // 簡単：ドン多め、カッ少なめ、お邪魔なし
+                    if (r < 0.6) type = 'don';
+                    else if (r < 0.8) type = 'ka';
+                } else if (level === 'normal') {
+                    if (r < 0.5) type = 'don';
+                    else if (r < 0.8) type = 'ka';
+                    else if (r < 0.9) type = 'avoid'; // 10%お邪魔
+                } else if (level === 'hard') {
+                    // 密度高め
+                    if (r < 0.4) type = 'don';
+                    else if (r < 0.75) type = 'ka';
+                    else if (r < 0.9) type = 'avoid'; // 15%お邪魔
+                } else if (level === 'oni') {
+                    // 鬼：容赦ない配置
+                    if (r < 0.45) type = 'don';
+                    else if (r < 0.85) type = 'ka';
+                    else type = 'avoid'; // 15%お邪魔
+                }
+
+                if (type) {
+                    newNotes.push({
+                        type: type,
+                        time: t,
+                        hit: false,
+                        missed: false
+                    });
+                }
+                
+                // 鬼モード特有の連打生成 (たまに16分音符間隔で追加)
+                if (level === 'oni' && Math.random() < 0.3) {
+                     newNotes.push({
+                        type: Math.random() < 0.5 ? 'don' : 'ka',
+                        time: t + interval / 2,
+                        hit: false,
+                        missed: false
+                    });
+                }
+            }
+            return { notes: newNotes, speed };
+        }
+
+        // --- STREAMING_CHUNK:Game initialization and loop functions... ---
+        function switchScreen(screenName) {
+            Object.values(screens).forEach(s => s.classList.add('hidden'));
+            screens[screenName].classList.remove('hidden');
+        }
+
+        // ゲーム開始
+        function startGame(level) {
+            initAudioContext(); // ユーザーアクション内で初期化
+            
+            currentLevel = level;
+            const beatmap = generateBeatmap(level, bgmDuration);
+            notes = beatmap.notes;
+            noteSpeed = beatmap.speed;
+            
+            // 叩いてよいノーツの総数を計算（達成率用）
+            totalValuableNotes = notes.filter(n => n.type !== 'avoid').length;
+            if (totalValuableNotes === 0) totalValuableNotes = 1; // 0割回避
+
+            // スコアリセット
+            score = 0;
+            combo = 0;
+            maxCombo = 0;
+            counts = { perfect: 0, good: 0, miss: 0 };
+            updateUI();
+
+            switchScreen('game');
+            showOverlay('3', 1000, () => {
+                showOverlay('2', 1000, () => {
+                    showOverlay('1', 1000, () => {
+                        showOverlay('スタート！', 1000, () => {
+                            // 開始
+                            if (hasBGM) {
+                                bgmAudio.currentTime = 0;
+                                bgmAudio.play().catch(e => console.error("Audio play failed:", e));
+                            }
+                            gameStartTime = performance.now();
+                            gameState = 'playing';
+                            requestAnimationFrame(gameLoop);
+                        });
+                    });
+                });
+            });
+        }
+
+        function showOverlay(text, duration, callback) {
+            overlayText.textContent = text;
+            overlayText.classList.remove('opacity-0');
+            setTimeout(() => {
+                overlayText.classList.add('opacity-0');
+                if (callback) setTimeout(callback, 200); // fade out time
+            }, duration);
+        }
+
+        function getCurrentTime() {
+            if (hasBGM) {
+                return bgmAudio.currentTime;
+            } else {
+                return (performance.now() - gameStartTime) / 1000;
+            }
+        }
+
+        // メインループ
+        function gameLoop() {
+            if (gameState !== 'playing') return;
+
+            const currentTime = getCurrentTime();
+            update(currentTime);
+            draw(currentTime);
+
+            // 終了判定
+            if (currentTime >= bgmDuration) {
+                endGame();
+            } else {
+                animationFrameId = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // --- STREAMING_CHUNK:Updating logic (moving notes, checking missed)... ---
+        function update(time) {
+            // 見逃し判定
+            for (let i = 0; i < notes.length; i++) {
+                const note = notes[i];
+                if (note.hit || note.missed) continue;
+
+                // 判定ラインを過ぎて閾値を超えたらMiss
+                if (time - note.time > THRESHOLD_MISS) {
+                    if (note.type !== 'avoid') {
+                        // 普通のノーツを見逃した
+                        note.missed = true;
+                        registerHitResult('Miss');
+                    } else {
+                        // お邪魔ノーツをやり過ごした（成功）
+                        note.missed = true; // これ以上判定しないためにフラグ立てる
+                        // お邪魔回避は特に加点しない
+                    }
+                }
+            }
+        }
+
+        // --- STREAMING_CHUNK:Rendering canvas graphics... ---
+        function draw(time) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 背景レーン
+            ctx.fillStyle = '#374151'; // gray-700
+            ctx.fillRect(0, canvas.height/2 - 40, canvas.width, 80);
+            
+            // レーンの中央線
+            ctx.strokeStyle = '#4b5563'; // gray-600
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height/2);
+            ctx.lineTo(canvas.width, canvas.height/2);
+            ctx.stroke();
+
+            // 判定枠 (ターゲット)
+            ctx.beginPath();
+            ctx.arc(TARGET_X, canvas.height/2, 35, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 6;
+            ctx.stroke();
+            // 内側の光
+            ctx.beginPath();
+            ctx.arc(TARGET_X, canvas.height/2, 28, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // ノーツの描画
+            // 逆順（後からくるものが下になるように）
+            for (let i = notes.length - 1; i >= 0; i--) {
+                const note = notes[i];
+                if (note.hit || note.missed) {
+                    // お邪魔ノーツはミス（叩いてしまった）の場合、赤いバツでも描く？
+                    continue;
+                }
+
+                // X座標の計算: 判定時間との差分 * 速度
+                const x = TARGET_X + (note.time - time) * noteSpeed;
+                const y = canvas.height / 2;
+
+                // 画面外なら描画しない
+                if (x > canvas.width + 50 || x < -50) continue;
+
+                // 丸の描画
+                ctx.beginPath();
+                ctx.arc(x, y, 30, 0, Math.PI * 2);
+
+                if (note.type === 'don') {
+                    ctx.fillStyle = '#f43f5e'; // rose-500
+                    ctx.fill();
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    drawEmoji(EMOJI_DON, x, y);
+                } else if (note.type === 'ka') {
+                    ctx.fillStyle = '#3b82f6'; // blue-500
+                    ctx.fill();
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    drawEmoji(EMOJI_KA, x, y);
+                } else if (note.type === 'avoid') {
+                    ctx.fillStyle = 'rgba(31, 41, 55, 0.8)'; // 暗め
+                    ctx.fill();
+                    ctx.strokeStyle = '#ef4444'; // red-500
+                    ctx.lineWidth = 3;
+                    ctx.setLineDash([6, 4]); // 点線
+                    ctx.stroke();
+                    ctx.setLineDash([]); // 元に戻す
+                    drawEmoji(EMOJI_AVOID, x, y);
+                }
+            }
+        }
+
+        function drawEmoji(emoji, x, y) {
+            ctx.font = '32px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            // Emojiは少しYを調整すると真ん中に来やすい
+            ctx.fillText(emoji, x, y + 2);
+        }
+
+        // --- STREAMING_CHUNK:Handling input and hit detection... ---
+        // 入力処理 (don or ka)
+        function handleInput(inputType) {
+            if (gameState !== 'playing') return;
+            
+            playDrumSound(inputType);
+            
+            // ボタンの視覚的フィードバック(スマホ用)
+            // イベントリスナー側でCSSクラスをトグルしているのでここでは判定のみ
+
+            const time = getCurrentTime();
+            
+            // 最も近い判定可能なノーツを探す
+            let targetNote = null;
+            let minDiff = Infinity;
+
+            for (let i = 0; i < notes.length; i++) {
+                const note = notes[i];
+                if (note.hit || note.missed) continue;
+
+                // 時間の絶対差
+                const diff = Math.abs(note.time - time);
+                
+                // まだ判定領域に入っているか (過ぎていても閾値内ならOK)
+                // note.time - time が負なら過ぎている
+                if (diff < minDiff && (note.time - time) < THRESHOLD_MISS) {
+                    minDiff = diff;
+                    targetNote = note;
+                }
+            }
+
+            if (targetNote) {
+                if (minDiff <= THRESHOLD_GOOD) {
+                    if (targetNote.type === 'avoid') {
+                        // お邪魔を叩いてしまった！
+                        targetNote.missed = true;
+                        registerHitResult('Miss');
+                        showPopup('不可', TARGET_X, canvas.height/2 - 40, 'miss');
+                    } else if (targetNote.type === inputType) {
+                        // 正解！
+                        targetNote.hit = true;
+                        if (minDiff <= THRESHOLD_PERFECT) {
+                            registerHitResult('Perfect');
+                            showPopup('良', TARGET_X, canvas.height/2 - 40, 'perfect');
+                        } else {
+                            registerHitResult('Good');
+                            showPopup('可', TARGET_X, canvas.height/2 - 40, 'good');
+                        }
+                    } else {
+                        // 種類間違い (ドンにカッなど)
+                        targetNote.missed = true;
+                        registerHitResult('Miss');
+                        showPopup('不可', TARGET_X, canvas.height/2 - 40, 'miss');
+                    }
+                } else if (minDiff <= THRESHOLD_MISS) {
+                    // 判定ギリギリ外側で叩いた場合（早すぎ・遅すぎ）
+                    // 種類があっていてもMiss扱い。お邪魔の場合は反応させない。
+                    if (targetNote.type !== 'avoid') {
+                        targetNote.missed = true;
+                        registerHitResult('Miss');
+                        showPopup('不可', TARGET_X, canvas.height/2 - 40, 'miss');
+                    }
+                }
+            }
+        }
+
+        // --- STREAMING_CHUNK:Score and UI updates... ---
+        function registerHitResult(result) {
+            if (result === 'Perfect') {
+                counts.perfect++;
+                score += 300 + combo * 10;
+                combo++;
+            } else if (result === 'Good') {
+                counts.good++;
+                score += 100 + combo * 5;
+                combo++;
+            } else if (result === 'Miss') {
+                counts.miss++;
+                combo = 0;
+            }
+
+            if (combo > maxCombo) maxCombo = combo;
+            updateUI();
+        }
+
+        function updateUI() {
+            uiScore.textContent = score;
+            uiCombo.textContent = combo;
+
+            // 達成率計算 (Perfect=100%, Good=50%)
+            // まだ判定されていないノーツも含めた全体に対する現在の達成率
+            let currentAchievement = (counts.perfect * 1 + counts.good * 0.5) / totalValuableNotes * 100;
+            if (currentAchievement > 100) currentAchievement = 100;
+            
+            uiPercentText.textContent = currentAchievement.toFixed(1) + '%';
+            uiGauge.style.width = currentAchievement + '%';
+
+            // コンボの色変更
+            if (combo >= 50) uiCombo.className = "text-2xl font-black text-yellow-500 leading-none drop-shadow-md";
+            else if (combo >= 10) uiCombo.className = "text-2xl font-black text-orange-500 leading-none";
+            else uiCombo.className = "text-2xl font-black text-red-500 leading-none";
+        }
+
+        // 判定文字をDOM上にポップアップさせる
+        function showPopup(text, x, y, typeClass) {
+            const popup = document.createElement('div');
+            popup.textContent = text;
+            popup.className = `popup-text ${typeClass}`;
+            
+            // Canvasのコンテナに対する相対位置を計算
+            // 今回はCanvasの表示サイズに合わせてスケール調整が必要だが、
+            // 簡易的にコンテナ内の固定位置(判定枠の少し上)に出す
+            popup.style.left = `20%`; // 大体TARGET_X付近
+            popup.style.top = `30%`;
+
+            canvasContainer.appendChild(popup);
+
+            // アニメーション完了後に削除
+            setTimeout(() => {
+                if (popup.parentNode) {
+                    popup.parentNode.removeChild(popup);
+                }
+            }, 600);
+        }
+
+        // --- STREAMING_CHUNK:Game end and result logic... ---
+        function endGame() {
+            gameState = 'result';
+            if (hasBGM) bgmAudio.pause();
+            cancelAnimationFrame(animationFrameId);
+            
+            // 最終達成率
+            let finalAchievement = (counts.perfect * 1 + counts.good * 0.5) / totalValuableNotes * 100;
+            if (finalAchievement > 100) finalAchievement = 100;
+
+            document.getElementById('res-percent').textContent = finalAchievement.toFixed(1) + '%';
+            document.getElementById('res-perfect').textContent = counts.perfect;
+            document.getElementById('res-good').textContent = counts.good;
+            document.getElementById('res-miss').textContent = counts.miss;
+            document.getElementById('res-max-combo').textContent = maxCombo;
+
+            // ランク判定
+            let rank = 'C';
+            let rankColor = 'text-blue-500';
+            if (finalAchievement >= 90) { rank = 'S'; rankColor = 'text-yellow-500'; }
+            else if (finalAchievement >= 75) { rank = 'A'; rankColor = 'text-red-500'; }
+            else if (finalAchievement >= 50) { rank = 'B'; rankColor = 'text-green-500'; }
+            
+            const rankEl = document.getElementById('res-rank');
+            rankEl.textContent = `${rank} ランク!!`;
+            rankEl.className = `text-6xl font-black drop-shadow-lg title-bounce ${rankColor}`;
+
+            switchScreen('result');
+        }
+
+        // --- STREAMING_CHUNK:Event Listeners setup... ---
+        
+        // レベル選択ボタン
+        document.querySelectorAll('.level-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const level = e.target.getAttribute('data-level');
+                startGame(level);
+            });
+        });
+
+        // 途中でやめるボタン
+        document.getElementById('btn-quit').addEventListener('click', () => {
+            if (gameState === 'playing') {
+                gameState = 'menu';
+                if (hasBGM) bgmAudio.pause();
+                cancelAnimationFrame(animationFrameId);
+                switchScreen('menu');
+            }
+        });
+
+        // タイトルへ戻るボタン
+        document.getElementById('btn-back-title').addEventListener('click', () => {
+            switchScreen('menu');
+        });
+
+        // キーボード入力
+        window.addEventListener('keydown', (e) => {
+            if (gameState !== 'playing') return;
+            if (e.repeat) return; // 長押しによる連続入力を防ぐ
+
+            const key = e.key.toLowerCase();
+            if (key === 'f' || key === 'j') {
+                handleInput('don');
+                simulateBtnPress(key === 'f' ? 'btn-don-l' : 'btn-don-r');
+            } else if (key === 'd' || key === 'k') {
+                handleInput('ka');
+                simulateBtnPress(key === 'd' ? 'btn-ka-l' : 'btn-ka-r');
+            }
+        });
+
+        // スマホ用ボタン視覚効果のヘルパー
+        function simulateBtnPress(id) {
+            const btn = document.getElementById(id);
+            if(btn) {
+                btn.style.transform = 'scale(0.95)';
+                btn.style.filter = 'brightness(0.8)';
+                setTimeout(() => {
+                    btn.style.transform = '';
+                    btn.style.filter = '';
+                }, 100);
+            }
+        }
+
+        // スマホ・タッチ入力設定
+        const setupTouchBtn = (id, type) => {
+            const btn = document.getElementById(id);
+            // タッチとマウス両対応。重複発火を防ぐ。
+            const trigger = (e) => {
+                e.preventDefault(); // スクロールやズームを防ぐ
+                if(e.type === 'touchstart' || e.buttons === 1) { // マウスは左クリックのみ
+                    handleInput(type);
+                    simulateBtnPress(id);
+                }
+            };
+            btn.addEventListener('touchstart', trigger, {passive: false});
+            btn.addEventListener('mousedown', trigger);
+        };
+
+        setupTouchBtn('btn-ka-l', 'ka');
+        setupTouchBtn('btn-don-l', 'don');
+        setupTouchBtn('btn-don-r', 'don');
+        setupTouchBtn('btn-ka-r', 'ka');
+
+        // キャンバス自体のリサイズ対応 (レスポンシブ維持しつつアスペクト比を固定)
+        function resizeCanvas() {
+            // CSS側で width: 100% となっているため、表示サイズに合わせて内部解像度を変えると
+            // 座標計算が狂う。
+            // 内部解像度は固定 (800x240) のままとし、CSSでスケールさせるのがベスト。
+            // したがってここでは特に何もしない。
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+    </script>
+</body>
+</html>
